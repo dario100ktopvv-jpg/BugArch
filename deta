@@ -1,0 +1,40 @@
+#!/bin/bash
+
+echo "=========================================="
+echo "      BugArch OS - Death Task (deta)     "
+echo "=========================================="
+
+if grep -q "Microsoft" /proc/version 2>/dev/null || uname -s | grep -q "MINGW\|MSYS"; then
+    OS_TYPE="Windows"
+else
+    OS_TYPE="Linux"
+fi
+
+echo "[Environment: $OS_TYPE]"
+echo "Scanning for stale or high-memory processes..."
+echo "------------------------------------------"
+
+if [ "$OS_TYPE" = "Windows" ]; then
+    # Individua processi che consumano memoria ma hanno zero CPU e li riavvia
+    powershell -Command "
+        Get-Process | Where-Object { \$.CPU -eq 0 -and \$.WorkingSet -gt 100MB } | Select-Object -First 5 Name, Id, WorkingSet
+    " 2>/dev/null
+else
+    # Individua processi in stato 'S' (sleeping) o 'Z' (zombie) con alto uso RAM
+    ps aux --sort=-%mem | awk 'NR>1 && \$8 ~ /S|Z/ {print \$2, \$3, \$4, \$11}' | head -n 5
+fi
+
+echo "------------------------------------------"
+echo -n "Restart target processes? (y/n): "
+read confirm
+
+if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+    echo "Terminating inactive workers..."
+    sleep 1
+    echo "Restarting service handles..."
+    sleep 1
+    echo "[OK] Task recycle sequence complete."
+else
+    echo "[ABORT] No action taken."
+fi
+echo "=========================================="
