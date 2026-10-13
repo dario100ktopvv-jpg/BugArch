@@ -1,0 +1,99 @@
+#!/bin/bash
+
+AUTO_YES=false
+AUTO_NO=false
+QUIET=false
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -Y) AUTO_YES=true; shift ;;
+        -N) AUTO_NO=true; shift ;;
+        -Q) QUIET=true; shift ;;
+        -*) echo "Opzione non valida: $1" >&2; exit 1 ;;
+        *) shift ;;
+    esac
+done
+
+# Gestione flag -N
+if [ "$AUTO_NO" = true ]; then
+    [ "$QUIET" = false ] && echo "Operazione annullata."
+    exit 0
+fi
+
+# Richiesta di conferma testuale semplice (gestita da -Y se attivo)
+if [ "$AUTO_YES" = false ] && [ "$QUIET" = false ]; then
+    read -p "le specifiche potrebbero contenere dati sensibili? continuare s/n: " confirm
+    [[ "$confirm" =~ ^[sS]$ ]] || { echo "Operazione annullata."; exit 0; }
+fi
+
+PC_MODEL="THIN B13UC MSI (ES)"
+
+# Rilevamento OS
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || -n "$WINDIR" ]]; then
+    OS_NAME="Microsoft Windows (UCRT64/Git Bash)"
+else
+    OS_NAME=$(uname -o 2>/dev/null || echo "Unknown OS")
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_NAME="$PRETTY_NAME"
+    fi
+fi
+
+CPU_INFO=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d ':' -f2 | xargs || echo "13th Gen Intel(R) Core(TM) i7-13620H")
+
+# GPU
+if command -v powershell.exe &>/dev/null; then
+    GPU_INFO=$(powershell.exe -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name" 2>/dev/null | tr -d '\r' | head -n 1)
+else
+    GPU_INFO=$(lspci 2>/dev/null | grep -i 'vga\|3d\|display' | cut -d ':' -f3 | xargs || echo "Intel / NVIDIA Integrated")
+fi
+
+LANG_INFO="${LANG:-it_IT.UTF-8}"
+KEYBOARD_LAYOUT="Italian (IT)"
+
+# Batteria
+BATTERY_STATUS="N/A (Collegato alla rete elettrica)"
+if command -v powershell.exe &>/dev/null; then
+    BAT_PCT=$(powershell.exe -Command "(Get-CimInstance Win32_Battery).EstimatedChargeRemaining" 2>/dev/null | tr -d '\r')
+    if [[ "$BAT_PCT" =~ ^[0-9]+$ ]]; then
+        BATTERY_STATUS="${BAT_PCT}%"
+    fi
+fi
+
+# Wi-Fi
+WIFI_STATUS="Disconnesso / Non rilevato"
+if command -v powershell.exe &>/dev/null; then
+    WIFI_NAME=$(powershell.exe -Command "(netsh wlan show interfaces) -match '^\s+SSID\s+:\s+' | Out-String" 2>/dev/null | tr -d '\r' | cut -d ':' -f2 | xargs)
+    [ -n "$WIFI_NAME" ] && WIFI_STATUS="$WIFI_NAME"
+elif command -v nmcli &>/dev/null; then
+    WIFI_NAME=$(nmcli -t -f active,ssid dev wifi | grep '^yes' | cut -d: -f2)
+    [ -n "$WIFI_NAME" ] && WIFI_STATUS="$WIFI_NAME"
+fi
+
+# IP
+IP_LOCAL=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || -n "$WINDIR" ]]; then
+    IP_LOCAL=$(ipconfig 2>/dev/null | grep -i "IPv4" | head -n 1 | cut -d ':' -f2 | xargs || echo "$IP_LOCAL")
+fi
+IP_PUBLIC=$(curl -s --max-time 2 https://api.ipify.org 2>/dev/null || echo "N/A / Offline")
+
+LOCAL_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Modalità Quiet (-Q)
+if [ "$QUIET" = true ]; then
+    echo "OS: $OS_NAME | PC: $PC_MODEL | CPU: $CPU_INFO | GPU: $GPU_INFO | WIFI: $WIFI_STATUS | IP_LOC: $IP_LOCAL | IP_PUB: $IP_PUBLIC | LANG: $LANG_INFO | KB: $KEYBOARD_LAYOUT | BAT: $BATTERY_STATUS | TIME: $LOCAL_TIME"
+    exit 0
+fi
+
+# Output Standard Pulito
+echo "PC              : $PC_MODEL"
+echo "OS              : $OS_NAME"
+echo "CPU             : $CPU_INFO"
+echo "SCHEDA GRAFICA  : $GPU_INFO"
+echo "WI-FI           : $WIFI_STATUS"
+echo "IP LOCALE       : $IP_LOCAL"
+echo "IP PUBBLICO     : $IP_PUBLIC"
+echo "LINGUA          : $LANG_INFO"
+echo "TASTIERA        : $KEYBOARD_LAYOUT"
+echo "BATTERIA        : $BATTERY_STATUS"
+echo "ORARIO LOCALE   : $LOCAL_TIME"

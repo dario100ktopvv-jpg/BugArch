@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Valori predefiniti dei flag globali
+AUTO_YES=false
+AUTO_NO=false
+QUIET=false
+
+# Analisi dei parametri da riga di comando
+PARAMS=()
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -Y) AUTO_YES=true; shift ;;
+        -N) AUTO_NO=true; shift ;;
+        -Q) QUIET=true; shift ;;
+        -*) 
+            echo "Opzione non valida: $1" >&2
+            exit 1 
+            ;;
+        *) 
+            PARAMS+=("$1") # Salva eventuali altri argomenti posizionali
+            shift 
+            ;;
+    esac
+done
+
+echo "=========================================="
+echo "      BugArch OS - Restheal Utility      "
+echo "=========================================="
+
+MISSING_FILE=""
+
+# Detect System Environment
+if grep -q "Microsoft" /proc/version 2>/dev/null || uname -s | grep -q "MINGW\|MSYS"; then
+    OS_TYPE="Windows"
+    WIN_SYS="/c/Windows/System32"
+    
+    # Controlli su eseguibili/librerie critiche di Windows
+    if [ ! -f "$WIN_SYS/drivers/etc/hosts" ]; then
+        MISSING_FILE="System32/drivers/etc/hosts (Network Routing Table)"
+    elif [ ! -f "$WIN_SYS/sfc.exe" ]; then
+        MISSING_FILE="System32/sfc.exe (System File Checker)"
+    elif [ ! -f "$WIN_SYS/chkdsk.exe" ]; then
+        MISSING_FILE="System32/chkdsk.exe (Disk Utility)"
+    fi
+else
+    OS_TYPE="Linux"
+    
+    # Controlli su configurazioni e binari chiave di Linux
+    if [ ! -f "/etc/resolv.conf" ]; then
+        MISSING_FILE="/etc/resolv.conf (DNS Configuration)"
+    elif [ ! -f "/etc/fstab" ]; then
+        MISSING_FILE="/etc/fstab (Filesystem Mount Table)"
+    elif [ ! -f "/etc/pki/tls/certs/ca-bundle.crt" ] && [ ! -f "/etc/ssl/certs/ca-certificates.crt" ]; then
+        MISSING_FILE="SSL/TLS CA Certificate Bundle (Security/Networking)"
+    fi
+fi
+
+# Valutazione stato e reindirizzamento
+if [ -n "$MISSING_FILE" ]; then
+    echo "[!] Critical non-vital component missing:"
+    echo "    -> $MISSING_FILE"
+    echo "[*] Redirecting to official repair/download portal..."
+    sleep 1
+
+    if [ "$OS_TYPE" = "Windows" ]; then
+        explorer.exe "https://www.microsoft.com/software-download" 2>/dev/null
+    else
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            case "$ID" in
+                arch)
+                    xdg-open "https://archlinux.org/download/" 2>/dev/null
+                    ;;
+                ubuntu)
+                    xdg-open "https://releases.ubuntu.com/" 2>/dev/null
+                    ;;
+                debian)
+                    xdg-open "https://www.debian.org/distrib/" 2>/dev/null
+                    ;;
+                *)
+                    xdg-open "https://www.kernel.org/" 2>/dev/null
+                    ;;
+            esac
+        fi
+    fi
+else
+    echo "[OK] System integrity verified. All target binaries and config files exist."
+fi
+
+echo "=========================================="

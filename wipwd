@@ -1,0 +1,63 @@
+#!/bin/bash
+
+AUTO_YES=false
+AUTO_NO=false
+QUIET=false
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -Y) AUTO_YES=true; shift ;;
+        -N) AUTO_NO=true; shift ;;
+        -Q)QUIET=true; shift ;;
+        -*) echo "Opzione non valida: $1" >&2; exit 1 ;;
+        *) shift ;;
+    esac
+done
+
+if [ "$AUTO_NO" = true ]; then
+    [ "$QUIET" = false ] && echo "Operazione annullata."
+    exit 0
+fi
+
+if [ "$AUTO_YES" = false ] && [ "$QUIET" = false ]; then
+    read -p "le password del wi-fi sono dati sensibili, continuare s/n: " confirm
+    [[ "$confirm" =~ ^[sS]$ ]] || { echo "Operazione annullata."; exit 0; }
+fi
+
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || -n "$WINDIR" ]]; then
+    if [ "$QUIET" = false ]; then
+        echo "=== Profili Wi-Fi e Password Salvate (Windows) ==="
+        # Estrae i nomi delle reti e mostra la password in chiaro per ciascuna
+        powershell.exe -Command '
+            $profiles = (netsh wlan show profiles) -match "Tutti i profili utente|All User Profile" | ForEach-Object { $_.Split(":")[1].Trim() }
+            foreach ($prof in $profiles) {
+                $detail = netsh wlan show profile name="$prof" key=clear
+                $pwd = ($detail -match "Contenuto chiave|Key Content")
+                if ($pwd) {
+                    $pvalue = $pwd.Split(":")[1].Trim()
+                } else {
+                    $pvalue = "Nessuna / Aperta"
+                }
+                Write-Output "Wi-Fi: $prof --> Password: $pvalue"
+            }
+        ' 2>/dev/null | tr -d '\r'
+    else
+        powershell.exe -Command '
+            $profiles = (netsh wlan show profiles) -match "Tutti i profili utente|All User Profile" | ForEach-Object { $_.Split(":")[1].Trim() }
+            foreach ($prof in $profiles) {
+                $detail = netsh wlan show profile name="$prof" key=clear
+                $pwd = ($detail -match "Contenuto chiave|Key Content")
+                $pvalue = if ($pwd) { $pwd.Split(":")[1].Trim() } else { "Open" }
+                Write-Output "$prof:$pvalue"
+            }
+        ' 2>/dev/null | tr -d '\r'
+    fi
+else
+    if [ "$QUIET" = false ]; then
+        echo "=== Password Wi-Fi (Linux / NetworkManager) ==="
+        echo "Su Linux le password salvate si trovano solitamente in /etc/NetworkManager/system-connections/"
+        sudo grep -r "psk=" /etc/NetworkManager/system-connections/ 2>/dev/null || echo "Permessi insufficienti o NetworkManager non trovato."
+    else
+        sudo grep -r "psk=" /etc/NetworkManager/system-connections/ 2>/dev/null | awk -F'/' '{print $NF}'
+    fi
+fi

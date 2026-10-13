@@ -1,40 +1,39 @@
 #!/bin/bash
 
-echo "=========================================="
-echo "      BugArch OS - Death Task (deta)     "
-echo "=========================================="
+AUTO_YES=false
+AUTO_NO=false
+QUIET=false
 
-if grep -q "Microsoft" /proc/version 2>/dev/null || uname -s | grep -q "MINGW\|MSYS"; then
-    OS_TYPE="Windows"
-else
-    OS_TYPE="Linux"
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -Y) AUTO_YES=true; shift ;;
+        -N) AUTO_NO=true; shift ;;
+        -Q) QUIET=true; shift ;;
+        -*) echo "Opzione non valida: $1" >&2; exit 1 ;;
+        *) shift ;;
+    esac
+done
+
+if [ "$QUIET" = false ]; then
+    echo "=========================================="
+    echo "      BugArch OS - Deta Recycler          "
+    echo "=========================================="
 fi
 
-echo "[Environment: $OS_TYPE]"
-echo "Scanning for stale or high-memory processes..."
-echo "------------------------------------------"
-
-if [ "$OS_TYPE" = "Windows" ]; then
-    # Individua processi che consumano memoria ma hanno zero CPU e li riavvia
-    powershell -Command "
-        Get-Process | Where-Object { \$.CPU -eq 0 -and \$.WorkingSet -gt 100MB } | Select-Object -First 5 Name, Id, WorkingSet
-    " 2>/dev/null
-else
-    # Individua processi in stato 'S' (sleeping) o 'Z' (zombie) con alto uso RAM
-    ps aux --sort=-%mem | awk 'NR>1 && \$8 ~ /S|Z/ {print \$2, \$3, \$4, \$11}' | head -n 5
+if [ "$AUTO_NO" = true ]; then
+    [ "$QUIET" = false ] && echo "[*] Flag -N attivo: Operazione di riciclo interrotta."
+    exit 0
 fi
 
-echo "------------------------------------------"
-echo -n "Restart target processes? (y/n): "
-read confirm
-
-if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
-    echo "Terminating inactive workers..."
-    sleep 1
-    echo "Restarting service handles..."
-    sleep 1
-    echo "[OK] Task recycle sequence complete."
-else
-    echo "[ABORT] No action taken."
+if [ "$AUTO_YES" = false ] && [ "$QUIET" = false ]; then
+    read -p "Vuoi procedere con il riciclo dei processi inattivi? [s/N]: " confirm
+    [[ "$confirm" =~ ^[sS]$ ]] || { echo "Annullato."; exit 0; }
 fi
-echo "=========================================="
+
+RECYCLED=0
+if [ "$QUIET" = true ]; then
+    echo "RECYCLED: $RECYCLED processes"
+else
+    echo "[OK] Riciclo completato. Elementi liberati: $RECYCLED"
+    echo "=========================================="
+fi

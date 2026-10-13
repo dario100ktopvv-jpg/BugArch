@@ -1,0 +1,44 @@
+#!/bin/bash
+
+AUTO_YES=false
+AUTO_NO=false
+QUIET=false
+PARAMS=()
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -Y) AUTO_YES=true; shift ;;
+        -N) AUTO_NO=true; shift ;;
+        -Q) QUIET=true; shift ;;
+        -*) echo "Opzione non valida: $1" >&2; exit 1 ;;
+        *) PARAMS+=("$1"); shift ;;
+    esac
+done
+
+MESSAGE="${PARAMS[*]}"
+
+if [ "$AUTO_NO" = true ]; then
+    [ "$QUIET" = false ] && echo "[*] Operazione annullata per flag -N."
+    exit 0
+fi
+
+if [ "$QUIET" = true ]; then
+    [ -n "$MESSAGE" ] && echo "$MESSAGE"
+    clear
+    exit 0
+fi
+
+# Stampa il messaggio richiesto
+if [ -n "$MESSAGE" ]; then
+    echo "[RECHO] $MESSAGE"
+else
+    echo "[RECHO] (Nessun messaggio fornito)"
+fi
+
+echo "Simulazione riavvio (pulizia schermo in corso)..."
+sleep 0.4
+clear
+
+echo "=========================================="
+echo "   BugArch OS - Terminale pulito (Test)   "
+echo "=========================================="

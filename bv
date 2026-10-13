@@ -1,0 +1,10 @@
+#!/bin/bash
+CURRENT="1.0.0"
+REMOTE=$(curl -s https://raw.githubusercontent.com/dario100ktopvv-jpg/BugArch/main/version.txt)
+
+echo "BugArch v$CURRENT"
+if [ "$CURRENT" = "$REMOTE" ]; then
+    echo "Aggiornato!"
+else
+    echo "Update disponibile: v$REMOTE"
+fi
